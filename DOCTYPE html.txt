@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>TITAN V43 | HUNTER PRO</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Oswald:wght@500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0b0c10;
+            --surface: #1f2833;
+            --primary: #45a29e;
+            --accent: #66fcf1;
+            --danger: #ff2e63;
+            --safe: #21bf73;
+            --warning: #f9ed69;
+            --white-glow: 0 0 10px rgba(255,255,255,0.8);
+        }
+
+        * { box-sizing: border-box; user-select: none; }
+        
+        body {
+            margin: 0; padding: 0; background: var(--bg); color: #fff;
+            font-family: 'JetBrains Mono', monospace;
+            height: 100vh; overflow: hidden;
+            display: flex; justify-content: center; align-items: center;
+        }
+
+        /* LAYOUT TÁTICO */
+        .dashboard {
+            width: 98%; height: 96vh;
+            display: grid;
+            grid-template-columns: 350px 1fr 350px;
+            grid-template-rows: 70px 1fr 180px;
+            gap: 10px;
+        }
+
+        .panel {
+            background: rgba(31, 40, 51, 0.95);
+            border: 1px solid #333;
+            border-radius: 4px;
+            display: flex; flex-direction: column;
+            position: relative;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+
+        .header-title {
+            background: #151b22; padding: 10px 15px; font-family: 'Oswald', sans-serif;
+            letter-spacing: 2px; color: var(--accent); border-bottom: 1px solid var(--primary);
+            display: flex; justify-content: space-between; align-items: center;
+        }
+
+        /* MEDIDOR DE PRESSÃO (CENTRO) */
+        .pressure-gauge {
+            grid-column: 2 / 3; grid-row: 2 / 3;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            background: radial-gradient(circle at center, #2c3e50 0%, #0b0c10 80%);
+            border: 1px solid var(--accent);
+        }
+
+        .gauge-container {
+            width: 100%; max-width: 600px; padding: 20px;
+            display: flex; flex-direction: column; gap: 10px;
+        }
+
+        .bar-wrapper {
+            display: flex; justify-content: space-between; align-items: center;
+            font-size: 0.8rem; color: #aaa;
+        }
+        
+        .pressure-track {
+            width: 100%; height: 20px; background: #111; border-radius: 10px;
+            overflow: hidden; position: relative; border: 1px solid #444;
+        }
+        
+        .pressure-cursor {
+            width: 4px; height: 100%; background: #fff;
+            position: absolute; left: 50%; box-shadow: 0 0 10px #fff;
+            transition: left 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 10;
+        }
+        .pressure-zone-red { position: absolute; left: 0; width: 50%; height: 100%; background: linear-gradient(90deg, var(--danger) 0%, transparent 100%); opacity: 0.3; }
+        .pressure-zone-black { position: absolute; right: 0; width: 50%; height: 100%; background: linear-gradient(-90deg, #fff 0%, transparent 100%); opacity: 0.3; }
+
+        #main-decision {
+            font-family: 'Oswald'; font-size: 5rem; font-weight: 700;
+            margin: 20px 0; z-index: 5; text-shadow: 0 0 30px rgba(0,0,0,0.5);
+        }
+
+        .status-badge {
+            padding: 5px 20px; background: #000; border: 1px solid #555;
+            color: #888; font-size: 0.8rem; border-radius: 20px;
+        }
+
+        /* LOGS E GRÁFICOS */
+        .log-terminal {
+            flex: 1; padding: 10px; overflow-y: auto; font-size: 0.7rem; color: #ccc;
+            background: rgba(0,0,0,0.2);
+        }
+        .log-line { border-left: 2px solid #444; padding-left: 8px; margin-bottom: 5px; }
+        
+        .stats-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px;
+        }
+        .stat-item {
+            background: rgba(0,0,0,0.3); padding: 10px; text-align: center; border: 1px solid #333;
+        }
+
+        /* HEADER */
+        .top-nav {
+            grid-column: 1 / 4; grid-row: 1 / 2;
+            display: flex; justify-content: space-between; align-items: center; padding: 0 20px;
+            background: rgba(11, 12, 16, 0.9); border-bottom: 2px solid var(--accent);
+        }
+
+        /* BOTÃO */
+        button {
+            width: 100%; padding: 15px; background: transparent; border: 1px solid var(--accent);
+            color: var(--accent); font-family: 'Oswald'; font-size: 1rem; cursor: pointer;
+            transition: 0.3s;
+        }
+        button:hover { background: var(--accent); color: #000; }
+
+        /* UTIL */
+        .c-red { color: var(--danger); }
+        .c-green { color: var(--safe); }
+        .c-white { color: #fff; }
+    </style>
+</head>
+<body>
+
+<div class="dashboard">
+
+    <div class="top-nav">
+        <div style="font-size: 1.5rem; font-weight: bold;">TITAN <span style="color:var(--accent)">V43 HUNTER PRO</span></div>
+        <div style="font-size: 0.8rem;">
+            TELEGRAM: <span id="tg-status" style="color:var(--danger)">OFFLINE</span> | 
+            API: <span id="api-status" style="color:var(--danger)">OFFLINE</span>
+        </div>
+    </div>
+
+    <div class="panel" style="grid-row: 2/3;">
+        <div class="header-title">AUDITORIA DE VARIÂNCIA</div>
+        <div style="padding: 15px;">
+            <div style="margin-bottom: 15px;">
+                <div class="bar-wrapper"><span>DESEQUILÍBRIO (ÚLTIMOS 50)</span> <span id="val-balance">0</span></div>
+                <div class="pressure-track">
+                    <div id="bal-bar" style="height:100%; width:50%; background:#444; transition:width 0.5s;"></div>
+                </div>
+                <div style="font-size:0.6rem; color:#666; margin-top:3px;">
+                    <span style="color:var(--danger)">EXCESSO RED</span> <span style="float:right; color:#fff">EXCESSO BLACK</span>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 15px;">
+                <div class="bar-wrapper"><span>CHANCE DE BRANCO (GAP)</span> <span id="val-white">0%</span></div>
+                <div class="pressure-track">
+                    <div id="white-bar" style="height:100%; width:0%; background:var(--white-glow); transition:width 0.5s;"></div>
+                </div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div id="streak-val" style="font-size:1.5rem; color:var(--accent)">0</div>
+                    <div style="font-size:0.6rem">STREAK ATUAL</div>
+                </div>
+                <div class="stat-item">
+                    <div id="pattern-val" style="font-size:1rem; color:#fff">---</div>
+                    <div style="font-size:0.6rem">PADRÃO</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="header-title">LOG DE LÓGICA</div>
+        <div id="logic-log" class="log-terminal"></div>
+    </div>
+
+    <div class="panel pressure-gauge">
+        <div id="ai-mode" class="status-badge">CALIBRANDO SENSORES...</div>
+
+        <div class="gauge-container">
+            <div class="bar-wrapper">
+                <span style="color:var(--danger)">PRESSÃO VERMELHA</span>
+                <span style="color:#fff">PRESSÃO PRETA</span>
+            </div>
+            <div class="pressure-track" style="height: 40px; border: 2px solid #555;">
+                <div class="pressure-zone-red"></div>
+                <div class="pressure-zone-black"></div>
+                <div id="pressure-needle" class="pressure-cursor"></div>
+            </div>
+            <div style="text-align: center; font-size: 0.7rem; color: #888; margin-top: 5px;">
+                <span id="pressure-text">MERCADO EQUILIBRADO (50/50)</span>
+            </div>
+        </div>
+
+        <div id="main-decision">SYNC</div>
+        <div id="confidence-display" style="color:var(--accent); letter-spacing: 2px;">AGUARDANDO RODADA...</div>
+        
+        <div style="width:60%; height:4px; background:#111; margin-top:20px; border-radius:2px;">
+            <div id="scan-line" style="height:100%; width:0%; background:var(--accent); box-shadow:0 0 10px var(--accent);"></div>
+        </div>
+    </div>
+
+    <div class="panel" style="grid-row: 2/3;">
+        <div class="header-title">TELEGRAM UPLINK</div>
+        <div id="tg-log" class="log-terminal" style="font-family:'Courier New'"></div>
+    </div>
+
+    <div class="panel" style="grid-column: 1/4; grid-row: 3/4; flex-direction: row; gap: 15px; padding: 15px;">
+        <div class="stat-item" style="flex:1; border-color:var(--safe)">
+            <div style="color:var(--safe); font-size:2rem; font-weight:bold;" id="wins">0</div>
+            <div>VITÓRIAS</div>
+        </div>
+        <div class="stat-item" style="flex:1; border-color:var(--danger)">
+            <div style="color:var(--danger); font-size:2rem; font-weight:bold;" id="losses">0</div>
+            <div>DERROTAS</div>
+        </div>
+        <div class="stat-item" style="flex:1; border-color:var(--accent)">
+            <div style="color:var(--accent); font-size:2rem; font-weight:bold;" id="seq-disp">0</div>
+            <div>SEQUÊNCIA ATUAL</div>
+        </div>
+        <div style="flex:1; display:flex; align-items:center;">
+            <button onclick="location.reload()">RESETAR IA</button>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    // --- CONFIGURAÇÃO BOT ---
+    const TG_CONFIG = {
+        token: "8570756941:AAFmtAAX3sX46ekEupYFl9UnKJqFYso_wnA",
+        chat: "@doubletestes"
+    };
+
+    class TitanHunter {
+        constructor() {
+            this.history = [];
+            this.ws = null;
+            // Adicionado seqW e seqL para controle de sequência
+            this.stats = { w: 0, l: 0, seqW: 0, seqL: 0 }; 
+            this.prediction = null;
+            this.isBusy = false;
+            
+            // Servidores
+            this.endpoints = [
+                'wss://api-gaming.blaze.bet.br/replication/?EIO=4&transport=websocket',
+                'wss://api-v2.blaze.com/replication/?EIO=4&transport=websocket'
+            ];
+
+            this.initTelegram();
+            this.connect(0);
+        }
+
+        // --- TELEGRAM ---
+        async sendTg(text) {
+            const url = `https://api.telegram.org/bot${TG_CONFIG.token}/sendMessage`;
+            try {
+                await fetch(url, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        chat_id: TG_CONFIG.chat,
+                        text: text,
+                        parse_mode: 'Markdown'
+                    })
+                });
+                this.logTg(`Sinal enviado com sucesso.`, 'ok');
+            } catch(e) {
+                this.logTg(`Erro ao enviar: ${e.message}`, 'err');
+            }
+        }
+
+        initTelegram() {
+            document.getElementById('tg-status').innerText = "ONLINE";
+            document.getElementById('tg-status').style.color = "var(--safe)";
+        }
+
+        logTg(msg, type) {
+            const el = document.getElementById('tg-log');
+            const d = document.createElement('div');
+            d.className = "log-line";
+            d.innerHTML = `> ${msg}`;
+            if(type === 'ok') d.style.color = "var(--safe)";
+            if(type === 'err') d.style.color = "var(--danger)";
+            el.prepend(d);
+            if(el.children.length > 20) el.lastChild.remove();
+        }
+
+        logLogic(msg) {
+            const el = document.getElementById('logic-log');
+            const d = document.createElement('div');
+            d.className = "log-line";
+            d.innerText = msg;
+            el.prepend(d);
+        }
+
+        // --- CONEXÃO ---
+        connect(idx) {
+            const url = this.endpoints[idx % this.endpoints.length];
+            this.ws = new WebSocket(url);
+
+            this.ws.onopen = () => {
+                document.getElementById('api-status').innerText = "CONECTADO";
+                document.getElementById('api-status').style.color = "var(--safe)";
+                this.logLogic("Conectado ao servidor Blaze.");
+                
+                this.ws.send('2');
+                setTimeout(() => this.ws.send('420["cmd",{"id":"subscribe","payload":{"room":"double_room_1"}}]'), 1000);
+                setInterval(() => { if(this.ws.readyState===1) this.ws.send('2'); }, 20000);
+            };
+
+            this.ws.onmessage = (e) => {
+                if(e.data.startsWith('42')) {
+                    try {
+                        const p = JSON.parse(e.data.substring(2));
+                        if(p[0] === 'data' && p[1]?.id === 'double.tick') {
+                            const pl = p[1].payload;
+                            if(pl.status === 'complete' && !this.isBusy) this.handleRound(pl);
+                        }
+                    } catch(err){}
+                }
+            };
+
+            this.ws.onclose = () => {
+                document.getElementById('api-status').innerText = "RECONECTANDO...";
+                setTimeout(() => this.connect(idx+1), 2000);
+            };
+        }
+
+        handleRound(data) {
+            this.isBusy = true;
+            const color = data.color === 1 ? 'red' : (data.color === 2 ? 'black' : 'white');
+
+            // Verifica resultado
+            if(this.prediction) {
+                if(this.prediction === 'skip') {
+                    // Nada
+                } else {
+                    const win = this.prediction === color || color === 'white';
+                    
+                    if(win) {
+                        this.stats.w++;
+                        this.stats.seqW++; // Aumenta sequencia WIN
+                        this.stats.seqL = 0; // Zera sequencia LOSS
+                        
+                        this.sendTg(`✅ **GREEN!**\nResultado: ${color.toUpperCase()}\n\n📈 Sequência: **${this.stats.seqW}** Green(s) seguidos.`);
+                        this.logTg("GREEN Confirmado.", 'ok');
+                    } else {
+                        this.stats.l++;
+                        this.stats.seqL++; // Aumenta sequencia LOSS
+                        this.stats.seqW = 0; // Zera sequencia WIN
+                        
+                        this.sendTg(`❌ **RED**\nResultado: ${color.toUpperCase()}\n\n📉 Sequência: **${this.stats.seqL}** Loss seguido(s).`);
+                        this.logTg("LOSS Detectado.", 'err');
+                    }
+                }
+                this.updateStats();
+            }
+
+            this.history.push(color);
+            if(this.history.length > 100) this.history.shift();
+
+            this.analyze();
+        }
+
+        analyze() {
+            // ANIMAÇÃO DE 10s
+            let p = 0;
+            const bar = document.getElementById('scan-line');
+            const main = document.getElementById('main-decision');
+            
+            main.innerText = "...";
+            main.style.color = "#555";
+            
+            // Cálculos em tempo real
+            this.calculateBalance();
+
+            const timer = setInterval(() => {
+                p++;
+                bar.style.width = p + "%";
+                
+                if(p >= 100) {
+                    clearInterval(timer);
+                    this.makeDecision();
+                    this.isBusy = false;
+                }
+            }, 100);
+        }
+
+        calculateBalance() {
+            // Calcula pressão de mercado (Últimos 50)
+            const slice = this.history.slice(-50);
+            let redCount = slice.filter(c => c === 'red').length;
+            let blackCount = slice.filter(c => c === 'black').length;
+            
+            // -X (Muitos pretos) ... 0 (Equilibrio) ... +X (Muitos vermelhos)
+            const balance = redCount - blackCount;
+            document.getElementById('val-balance').innerText = balance > 0 ? `+${balance} (R)` : `${balance} (B)`;
+            
+            // Move Agulha
+            let needlePos = 50 + (balance * 2.5); // Cada ponto vale 2.5%
+            needlePos = Math.max(5, Math.min(95, needlePos));
+            document.getElementById('pressure-needle').style.left = needlePos + "%";
+            
+            // Texto
+            const txt = document.getElementById('pressure-text');
+            if(balance > 5) { txt.innerText = "PRESSÃO ALTA: VERMELHO (MERCADO PEDE PRETO)"; txt.style.color = "#fff"; }
+            else if(balance < -5) { txt.innerText = "PRESSÃO ALTA: PRETO (MERCADO PEDE VERMELHO)"; txt.style.color = "var(--danger)"; }
+            else { txt.innerText = "MERCADO ESTÁVEL"; txt.style.color = "#888"; }
+
+            // Gap do Branco
+            let gap = 0;
+            for(let i=this.history.length-1; i>=0; i--) {
+                if(this.history[i] === 'white') break;
+                gap++;
+            }
+            // Probabilidade simulada
+            let whiteChance = Math.min(100, gap * 1.5); // Aumenta conforme gap cresce
+            document.getElementById('val-white').innerText = gap + " rodadas";
+            document.getElementById('white-bar').style.width = whiteChance + "%";
+
+            this.metricBalance = balance;
+        }
+
+        makeDecision() {
+            const streak = this.getStreak();
+            const last = this.history[this.history.length-1];
+            
+            let target = 'skip';
+            let confidence = 0;
+            let reason = "";
+
+            // LÓGICA V42 - VARIANCE HUNTER
+            
+            // 1. SURF DE TENDÊNCIA (Se streak > 3, ignore o equilíbrio e surfe)
+            if (streak >= 3) {
+                target = last;
+                confidence = 90;
+                reason = `Surf de Tendência (${streak}x)`;
+            }
+            // 2. REVERSÃO POR PRESSÃO (Se não tem streak e o balanço está crítico)
+            else if (Math.abs(this.metricBalance) >= 6) {
+                // Se Balanço positivo (Muitos vermelhos) -> Aposte Preto
+                if(this.metricBalance > 0) { target = 'black'; }
+                else { target = 'red'; } // Balanço negativo (Muitos pretos) -> Aposte Vermelho
+                
+                confidence = 85;
+                reason = "Correção de Variância (Pressão Alta)";
+            }
+            // 3. QUEBRA DE XADREZ (Se streak 1 e padrão claro)
+            else if (this.isChess()) {
+                target = last === 'red' ? 'black' : 'red';
+                confidence = 80;
+                reason = "Padrão Alternado Detectado";
+            }
+            // 4. FILTRO
+            else {
+                target = 'skip';
+                reason = "Mercado Neutro - Aguardando Oportunidade";
+            }
+
+            this.prediction = target;
+            
+            // RENDER
+            const main = document.getElementById('main-decision');
+            const conf = document.getElementById('confidence-display');
+            
+            document.getElementById('pattern-val').innerText = reason;
+            document.getElementById('streak-val').innerText = streak;
+
+            if(target === 'skip') {
+                main.innerText = "ESPERAR";
+                main.style.color = "#555";
+                main.style.textShadow = "none";
+                conf.innerText = "SEM ENTRADA CLARA";
+                this.logLogic("Decisão: Hold.");
+            } else {
+                if(target === 'white') target = 'red'; // Fallback
+                main.innerText = target.toUpperCase();
+                
+                const c = target === 'red' ? 'var(--danger)' : '#fff';
+                main.style.color = c;
+                main.style.textShadow = `0 0 50px ${c}`;
+                conf.innerText = `CONFIANÇA: ${confidence}%`;
+                
+                this.logLogic(`Entrada: ${target} (${reason})`);
+                
+                // TELEGRAM SEND
+                const emoji = target === 'red' ? '🔴' : '⚫';
+                const msg = `
+🎯 **ENTRADA CONFIRMADA**
+Aposte: ${target.toUpperCase()} ${emoji}
+Proteção: ⚪
+Motivo: ${reason}
+📊 Confiança: ${confidence}%
+`;
+                this.sendTg(msg);
+            }
+        }
+
+        getStreak() {
+            let c = 1;
+            for(let i=this.history.length-1; i>0; i--) {
+                if(this.history[i] === this.history[i-1]) c++; else break;
+            }
+            return c;
+        }
+        
+        isChess() {
+            if(this.history.length < 4) return false;
+            const h = this.history;
+            return h[h.length-1] !== h[h.length-2] && h[h.length-2] !== h[h.length-3];
+        }
+
+        updateStats() {
+            document.getElementById('wins').innerText = this.stats.w;
+            document.getElementById('losses').innerText = this.stats.l;
+            
+            // Mostra a sequencia atual no painel também
+            if(this.stats.seqW > 0) {
+                document.getElementById('seq-disp').innerText = `+${this.stats.seqW}`;
+                document.getElementById('seq-disp').style.color = "var(--safe)";
+            } else {
+                document.getElementById('seq-disp').innerText = `-${this.stats.seqL}`;
+                document.getElementById('seq-disp').style.color = "var(--danger)";
+            }
+        }
+    }
+
+    const Titan = new TitanHunter();
+</script>
+</body>
+</html>
